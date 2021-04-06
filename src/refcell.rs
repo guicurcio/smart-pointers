@@ -20,26 +20,59 @@ impl<T> RefCell<T> {
             state: Cell::new(RefState::Unshared),
         }
     }
-    pub fn borrow(&self) -> Option<&T> {
+    pub fn borrow(&self) -> Option<Ref<'_, T>> {
         match self.state.get() {
             RefState::Unshared => {
                 self.state.set(RefState::Shared(1));
-                Some(unsafe { &*self.value.get() })
+                Some(Ref {
+                    reference_to_refcell: self,
+                })
             }
             RefState::Shared(n) => {
                 self.state.set(RefState::Shared(n + 1));
-                Some(unsafe { &*self.value.get() })
+                Some(Ref {
+                    reference_to_refcell: self,
+                })
             }
             RefState::Exclusive => None,
         }
     }
 
-    pub fn borrow_mut(&self) -> Option<&mut T> {
+    pub fn borrow_mut(&self) -> Option<RefMut<'_, T>> {
         if let RefState::Unshared = self.state.get() {
+            // This is the only reference that can be given.
             self.state.set(RefState::Exclusive);
             Some(unsafe { &mut *self.value.get() })
         } else {
             None
         }
+    }
+}
+
+// Points to the lifetime of the refcell.
+pub struct Ref<'refcell, T> {
+    reference_to_refcell: &'refcell RefCell<T>,
+}
+pub struct RefMut<'refcell, T> {
+    mut_reference_to_refcell: &'refcell RefCell<T>,
+}
+
+impl<T> Drop for Ref<'_, T> {
+    fn drop(&mut self) {
+        // decrement the reference ount.
+        // state must be shared.
+        match self.reference_to_refcell.state.get() {
+            RefState::Exclusive | RefState::Unshared => unreachable!(),
+            RefState::Shared(1) => self.reference_to_refcell.state.set(RefState::Unshared),
+            // If it's shared, then decrement it by one when dropping it.
+            RefState::Shared(n) => self.reference_to_refcell.state.set(RefState::Shared(n - 1)),
+        }
+    }
+}
+
+impl<T> std::ops::Deref for Ref<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &mut *self.reference_to_refcell.value.get() }
     }
 }
