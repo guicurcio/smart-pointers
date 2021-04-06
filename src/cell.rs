@@ -23,8 +23,11 @@ impl<T> Cell<T> {
     }
     // We give out a copy of it.
     // Returning a reference to self; erasing the copy trait bound.
-    pub fn get(&self) -> &T {
-        unsafe { &*self.value.get() }
+    pub fn get(&self) -> T
+    where
+        T: Copy,
+    {
+        unsafe { *self.value.get() }
     }
 }
 
@@ -36,23 +39,17 @@ mod test {
     #[test]
     fn bad_implementation() {
         use std::sync::Arc;
-        let x = Arc::new(Cell::new(42));
+        let x = Arc::new(Cell::new([1, 1000000000]));
         let x1 = Arc::clone(&x);
-        std::thread::spawn(move || {
-            x1.set(43);
+        let first = std::thread::spawn(move || {
+            x1.set([2, 1000000000]);
         });
         let x2 = Arc::clone(&x);
-        std::thread::spawn(move || {
-            x2.set(44);
+        let second = std::thread::spawn(move || {
+            x2.set([3, 1000000000]);
         });
-    }
-
-    #[test]
-    fn bad2() {
-        let x = Cell::new(vec![42]);
-        // Get only returns a copy and not a reference. So this should not work...
-        let first = &x.get()[0];
-        x.set(vec![]);
-        println!("{}", first);
+        first.join().unwrap();
+        second.join().unwrap();
+        println!("{:?} ", x.get(),)
     }
 }
