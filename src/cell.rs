@@ -4,6 +4,10 @@ pub struct Cell<T> {
     value: UnsafeCell<T>,
 }
 
+// We get this with UnsafeCell;
+// impl<T> !Sync for Cell<T> {}
+// It's thread safe.
+
 impl<T> Cell<T> {
     pub fn new(value: T) -> Self {
         Self {
@@ -16,8 +20,11 @@ impl<T> Cell<T> {
         }
     }
 
-    pub fn get(&self) -> T {
-        *self.value.get()
+    pub fn get(&self) -> T
+    where
+        T: Copy,
+    {
+        unsafe { *self.value.get() }
     }
 }
 
