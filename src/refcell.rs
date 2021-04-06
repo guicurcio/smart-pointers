@@ -42,7 +42,9 @@ impl<T> RefCell<T> {
         if let RefState::Unshared = self.state.get() {
             // This is the only reference that can be given.
             self.state.set(RefState::Exclusive);
-            Some(unsafe { &mut *self.value.get() })
+            Some(RefMut {
+                mut_reference_to_refcell: self,
+            })
         } else {
             None
         }
@@ -74,5 +76,30 @@ impl<T> std::ops::Deref for Ref<'_, T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         unsafe { &mut *self.reference_to_refcell.value.get() }
+    }
+}
+
+impl<T> Drop for RefMut<'_, T> {
+    fn drop(&mut self) {
+        // decrement the reference ount.
+        // state must be shared.
+        match self.mut_reference_to_refcell.state.get() {
+            RefState::Shared(_) | RefState::Unshared => unreachable!(),
+            // When  dropped we know that it's unshared.
+            RefState::Exclusive => self.mut_reference_to_refcell.state.set(RefState::Unshared),
+        }
+    }
+}
+
+impl<T> std::ops::Deref for RefMut<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.mut_reference_to_refcell.value.get() }
+    }
+}
+
+impl<T> std::ops::DerefMut for RefMut<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *self.mut_reference_to_refcell.value.get() }
     }
 }
